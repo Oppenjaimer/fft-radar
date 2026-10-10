@@ -2,7 +2,8 @@
 
 #include <cmath>
 #include <complex>
-#include <iomanip>
+#include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <numbers>
 
@@ -14,27 +15,29 @@ int main() {
     for (size_t n = 0; n < N; n++) {
         double angle = -2.0 * std::numbers::pi * 1 * n / N;
         input[n] = std::complex<double>(std::cos(angle), 0.0);
-
-        std::cout << "Sample " << n << ": "
-                   << std::fixed << std::setprecision(3) << input[n].real() << " + "
-                   << input[n].imag() << "i\n";
     }
 
     // Run DFT
     fourier::ComplexVector output = fourier::dft(input);
-    std::cout << "\n";
 
-    for (size_t k = 0; k < N; ++k) {
-        // Multiply by 2 because input is real
-        double norm_real = output[k].real() * 2.0 / static_cast<double>(N);
-        double norm_imag = output[k].imag() * 2.0 / static_cast<double>(N);
-        double magnitude = std::abs(output[k]) * 2.0 / static_cast<double>(N);
-
-        std::cout << "Bin " << k << ": |"
-                  << std::setprecision(3) << norm_real << " + "
-                  << std::setprecision(3) << norm_imag << "i| = "
-                  << magnitude << "\n";
+    std::ofstream file("data/data.csv");
+    if (!file.is_open()) {
+        std::cerr << "Unable to open CSV file\n";
+        return 1;
     }
+
+    file << "index,time_ampl,freq_ampl\n";
+
+    for (size_t i = 0; i < N; i++) {
+        double time_amplitude = input[i].real();
+        double freq_amplitude = std::abs(output[i]);
+
+        file << i << ","
+            << time_amplitude << ","
+            << freq_amplitude << "\n";
+    }
+
+    file.close();
 
     return 0;
 }
