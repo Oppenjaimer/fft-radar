@@ -9,7 +9,7 @@ N_half = N // 2
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
 
 # Time domain
-ax1.plot(df["index"], df["time_ampl"], marker="o")
+ax1.plot(df["index"], df["time_ampl"], "tab:blue")
 ax1.set_title("Time Domain")
 ax1.set_xlabel("Sample ($n$)")
 ax1.set_ylabel("Amplitude")
@@ -24,7 +24,7 @@ if len(normalized_mag) > 0:
     normalized_mag[0] = normalized_mag[0] / 2
 
 # Frequency domain
-ax2.stem(positive_freqs, normalized_mag)
+ax2.stem(positive_freqs, normalized_mag, basefmt=" ", markerfmt="", linefmt="tab:red")
 ax2.set_title("Frequency Domain")
 ax2.set_xlabel("Frequency Bin ($k$)")
 ax2.set_ylabel("Normalized Magnitude")
