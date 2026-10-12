@@ -23,7 +23,7 @@ struct Target {
  * @return Exit code.
  */
 int main() {
-    constexpr size_t N = 1000;
+    constexpr size_t N = 1024;
     fourier::ComplexVector input(N);
 
     // Define targets
@@ -52,8 +52,8 @@ int main() {
         input[n] = std::complex<double>(signal_value, 0.0);
     }
 
-    // Run DFT
-    fourier::ComplexVector output = fourier::dft(input);
+    // Run FFT
+    fourier::ComplexVector output = fourier::fft(input);
 
     // Open output CSV file
     std::ofstream file("data/data.csv");
