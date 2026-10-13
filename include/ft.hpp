@@ -7,6 +7,27 @@ namespace fourier {
     using ComplexVector = std::vector<std::complex<double>>;    ///< Vector of double-precision complex numbers.
 
     /**
+     * @brief Supported windowing functions to mitigate spectral leakage.
+     */
+    enum class WindowType {
+        Rectangular,
+        Hann,
+        Hamming,
+        Blackman
+    };
+
+    /**
+     * @brief Apply a windowing function to a time-domain signal.
+     *
+     * Modifies the input signal by multiplying it with the chosen window curve. This prepares the signal for FFT by
+     * smoothing the boundaries, reducing spectral leakage at the cost of slight frequency resolution loss.
+     *
+     * @param signal Time-domain signal array to be windowed.
+     * @param type Windowing function type.
+     */
+    void apply_window(ComplexVector& signal, WindowType type);
+
+    /**
      * @brief Compute the discrete Fourier transform (DFT) of a complex signal.
      *
      * The returned frequency bins are the raw, unnormalized sums. To obtain true physical amplitudes, the magnitude

@@ -42,6 +42,42 @@ namespace {
     }
 }
 
+void fourier::apply_window(ComplexVector &signal, WindowType type) {
+    size_t N = signal.size();
+    if (N == 0) return;
+
+    // Rectangular window is equivalent to multiplication by 1
+    if (type == WindowType::Rectangular) return;
+
+    // Compute windowed values
+    for (size_t n = 0; n < N; n++) {
+        double window_value = 1.0;
+        double angle = 2.0 * std::numbers::pi * n / N;
+
+        switch (type) {
+            case WindowType::Hann:
+                // Hann window: 0.5*(1 - cos(2πn/N))
+                window_value = 0.5 - 0.5 * std::cos(angle);
+                break;
+
+            case WindowType::Hamming:
+                // Hamming window: 0.54 - 0.46*cos(2πn/N)
+                window_value = 0.54 - 0.46 * std::cos(angle);
+                break;
+
+            case WindowType::Blackman:
+                // Blackman window: 0.42 - 0.5*cos(2πn/N) + 0.08*cos(4πn/N)
+                window_value = 0.42 - 0.5 * std::cos(angle) + 0.08 * std::cos(2 * angle);
+                break;
+
+            default:
+                break;
+        }
+
+        signal[n] *= window_value;
+    }
+}
+
 ComplexVector fourier::dft(const ComplexVector &input) {
     size_t N = input.size();
     if (N == 0) return {};

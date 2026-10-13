@@ -30,7 +30,7 @@ int main() {
     std::vector<Target> targets = {
         {5.0,   1.2, 0.0},
         {25.0,  0.5, std::numbers::pi / 4.0},
-        {50.0,  0.8, std::numbers::pi / 2.0},
+        {50.5,  0.8, std::numbers::pi / 2.0},
         {300.0, 1.0, 1.27}
     };
 
@@ -53,7 +53,9 @@ int main() {
     }
 
     // Run FFT
-    fourier::ComplexVector output = fourier::fft(input);
+    fourier::ComplexVector processed_input = input;
+    fourier::apply_window(processed_input, fourier::WindowType::Hann);
+    fourier::ComplexVector output = fourier::fft(processed_input);
 
     // Open output CSV file
     std::ofstream file("data/data.csv");
