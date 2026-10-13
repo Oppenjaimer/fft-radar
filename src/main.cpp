@@ -28,10 +28,10 @@ int main() {
 
     // Define targets
     std::vector<Target> targets = {
-        {5.0,   1.2, 0.0},
         {25.0,  0.5, std::numbers::pi / 4.0},
         {50.5,  0.8, std::numbers::pi / 2.0},
-        {300.0, 1.0, 1.27}
+        {300.0, 1.0, 1.27},
+        {430.2, 1.2, 0.0},
     };
 
     // Initialize random noise distribution
@@ -56,6 +56,50 @@ int main() {
     fourier::ComplexVector processed_input = input;
     fourier::apply_window(processed_input, fourier::WindowType::Hann);
     fourier::ComplexVector output = fourier::fft(processed_input);
+
+    // Extract magnitudes
+    std::vector<double> magnitudes(N / 2);
+    for (size_t k = 0; k < N / 2; k++) {
+        double magnitude = std::abs(output[k]) / static_cast<double>(N);
+        if (k > 0) magnitude *= 2;
+
+        magnitudes[k] = magnitude;
+    }
+
+    // Run CA-CFAR
+    constexpr size_t num_train = 15;
+    constexpr size_t num_guard = 2;
+    constexpr double threshold_factor = 3.5;
+    std::vector<size_t> detections = fourier::ca_cfar(magnitudes, num_train, num_guard, threshold_factor);
+
+    // Perform clustering to group contiguous detections
+    std::vector<size_t> clustered_detections;
+    if (!detections.empty()) {
+        size_t current_peak_bin = detections[0];
+
+        for (size_t i = 1; i < detections.size(); i++) {
+            if (detections[i] == detections[i - 1] + 1) {
+                // Contiguous detections, choose one with highest energy
+                if (magnitudes[detections[i]] > magnitudes[current_peak_bin])
+                    current_peak_bin = detections[i];
+            } else {
+                // No longer traversing previous cluster
+                clustered_detections.push_back(current_peak_bin);
+                current_peak_bin = detections[i];
+            }
+        }
+
+        clustered_detections.push_back(current_peak_bin);
+    }
+
+    // Output CA-CFAR results
+    if (clustered_detections.empty()) {
+        std::cout << "No targets detected\n";
+    } else {
+        for (size_t bin : clustered_detections) {
+            std::cout << "Target found at bin " << bin << " with magnitude " << magnitudes[bin] << "\n";
+        }
+    }
 
     // Open output CSV file
     std::ofstream file("data/data.csv");

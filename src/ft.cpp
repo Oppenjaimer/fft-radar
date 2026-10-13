@@ -3,6 +3,7 @@
 #include <cmath>
 #include <complex>
 #include <numbers>
+#include <vector>
 
 using fourier::ComplexVector;
 
@@ -114,4 +115,35 @@ ComplexVector fourier::fft(const ComplexVector& input) {
         padded_input.resize(power_of_two, std::complex<double>(0.0, 0.0));
 
     return fft_radix2(padded_input);
+}
+
+std::vector<size_t> fourier::ca_cfar(const std::vector<double>& magnitudes, size_t num_train, size_t num_guard, double threshold_factor) {
+    std::vector<size_t> detections;
+
+    // Check if window is out of bounds
+    size_t N = magnitudes.size();
+    size_t side_window = num_train + num_guard;
+    if (N <= 2 * side_window) return detections;
+
+    // Slide CUT across spectrum
+    for (size_t i = side_window; i < N - side_window; i++) {
+        double noise_sum = 0.0;
+
+        // Add up noise in training cells to the left
+        for (size_t j = i - side_window; j < i - num_guard; j++) {
+            noise_sum += magnitudes[j];
+        }
+
+        // Add up noise in training cells to the right
+        for (size_t j = i + num_guard + 1; j <= i + side_window; j++) {
+            noise_sum += magnitudes[j];
+        }
+
+        // Check if magnitude is above threshold
+        double noise_avg = noise_sum / (2.0 * num_train);
+        double threshold = noise_avg * threshold_factor;
+        if (magnitudes[i] > threshold) detections.push_back(i);
+    }
+
+    return detections;
 }

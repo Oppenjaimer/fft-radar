@@ -23,7 +23,7 @@ namespace fourier {
      * smoothing the boundaries, reducing spectral leakage at the cost of slight frequency resolution loss.
      *
      * @param signal Time-domain signal array to be windowed.
-     * @param type Windowing function type.
+     * @param type   Windowing function type.
      */
     void apply_window(ComplexVector& signal, WindowType type);
 
@@ -52,4 +52,18 @@ namespace fourier {
      * @return ComplexVector of N frequency bins representing the spectrum.
      */
     ComplexVector fft(const ComplexVector& input);
+
+    /**
+     * @brief Apply 1D cell-averaging constant false alarm rate (CA-CFAR) detection.
+     *
+     * Scans a magnitude spectrum to automatically detect peaks above a dynamically calculated noise floor.
+     *
+     * @param magnitudes       Frequency spectrum magnitudes.
+     * @param num_train        Number of training cells on one side of the CUT.
+     * @param num_guard        Number of guard cells on one side of the CUT.
+     * @param threshold_factor Multiplier applied to the average noise to set the threshold.
+     *
+     * @return Indices of the bins where targets were detected.
+     */
+    std::vector<size_t> ca_cfar(const std::vector<double>& magnitudes, size_t num_train, size_t num_guard, double threshold_factor);
 };
