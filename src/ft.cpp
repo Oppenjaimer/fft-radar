@@ -1,59 +1,69 @@
 #include "ft.hpp"
 
+#include <bit>
 #include <cmath>
 #include <complex>
+#include <limits>
 #include <numbers>
+#include <utility>
 #include <vector>
 
+using fourier::Complex;
 using fourier::ComplexVector;
 
 namespace {
     /**
-     * @brief Internal FFT function which assumes input size is a power of two.
+     * @brief In-place iterative Cooley-Tukey radix-2 FFT.
+     * @param input Time-domain signal array with power-of-two size.
      */
-    ComplexVector fft_radix2(const ComplexVector& input) {
+    void fft_radix2(ComplexVector& input) {
         size_t N = input.size();
-        if (N <= 1) return input;
+        if (N <= 1) return;
 
-        // Split into even and odd components
-        ComplexVector even(N / 2);
-        ComplexVector odd(N / 2);
-        for (size_t i = 0; i < N / 2; i++) {
-            even[i] = input[i * 2];
-            odd[i] = input[i * 2 + 1];
+        // Bit-reversal permutation
+        for (size_t i = 1, j = 0; i < N; i++) {
+            size_t bit = N >> 1;
+            while (j & bit) {
+                j ^= bit;
+                bit >>= 1;
+            }
+
+            j ^= bit;
+            if (i < j) std::swap(input[i], input[j]);
         }
 
-        // Recursive calls
-        ComplexVector y_even = fft_radix2(even);
-        ComplexVector y_odd = fft_radix2(odd);
+        // Iterative butterfly stages
+        for (size_t len = 2; len <= N; len <<= 1) {
+            double angle = -2.0 * std::numbers::pi / len;
+            Complex w_len(std::cos(angle), std::sin(angle));
+            size_t half_len = len >> 1;
 
-        // Perform butterfly operation
-        ComplexVector y(N);
-        for (size_t k = 0; k < N / 2; k++) {
-            double angle = -2.0 * std::numbers::pi * k / N;
+            for (size_t i = 0; i < N; i += len) {
+                Complex w(1.0, 0.0);
 
-            // Euler: e^{i*angle} = cos(angle) + i*sin(angle)
-            std::complex<double> w(std::cos(angle), std::sin(angle));
+                for (size_t k = 0; k < half_len; k++) {
+                    Complex u = input[i + k];
+                    Complex v = input[i + k + half_len] * w;
 
-            y[k] = y_even[k] + w * y_odd[k];
-            y[k + N / 2] = y_even[k] - w * y_odd[k];
+                    input[i + k] = u + v;
+                    input[i + k + half_len] = u - v;
+                    w *= w_len;
+                }
+            }
         }
-
-        return y;
     }
 }
 
 void fourier::apply_window(ComplexVector &signal, WindowType type) {
     size_t N = signal.size();
-    if (N == 0) return;
+    if (N == 0 || type == WindowType::Rectangular) return;
 
-    // Rectangular window is equivalent to multiplication by 1
-    if (type == WindowType::Rectangular) return;
+    double angle_step = 2.0 * std::numbers::pi / N;
 
     // Compute windowed values
     for (size_t n = 0; n < N; n++) {
         double window_value = 1.0;
-        double angle = 2.0 * std::numbers::pi * n / N;
+        double angle = angle_step * n;
 
         switch (type) {
             case WindowType::Hann:
@@ -68,7 +78,7 @@ void fourier::apply_window(ComplexVector &signal, WindowType type) {
 
             case WindowType::Blackman:
                 // Blackman window: 0.42 - 0.5*cos(2πn/N) + 0.08*cos(4πn/N)
-                window_value = 0.42 - 0.5 * std::cos(angle) + 0.08 * std::cos(2 * angle);
+                window_value = 0.42 - 0.5 * std::cos(angle) + 0.08 * std::cos(2.0 * angle);
                 break;
 
             default:
@@ -83,14 +93,14 @@ ComplexVector fourier::dft(const ComplexVector &input) {
     size_t N = input.size();
     if (N == 0) return {};
 
+    ComplexVector output(N, Complex(0.0, 0.0));
+    double angle_step = -2.0 * std::numbers::pi / N;
+
     // Compute output values
-    ComplexVector output(N, std::complex<double>(0.0, 0.0));
     for (size_t k = 0; k < N; k++) {
         for (size_t n = 0; n < N; n++) {
-            double angle = -2.0 * std::numbers::pi * k * n / N;
-
-            // Euler: e^{i*angle} = cos(angle) + i*sin(angle)
-            std::complex<double> exp_term(std::cos(angle), std::sin(angle));
+            double angle = angle_step * k * n;
+            Complex exp_term(std::cos(angle), std::sin(angle));
 
             output[k] += input[n] * exp_term;
         }
@@ -103,47 +113,94 @@ ComplexVector fourier::fft(const ComplexVector& input) {
     size_t N = input.size();
     if (N == 0) return {};
 
-    // Compute next power of two
-    size_t power_of_two = 1;
-    while (power_of_two < N) {
-        power_of_two *= 2;
-    }
+    // Zero-pad input
+    size_t padded_size = std::bit_ceil(N);
+    ComplexVector buffer(padded_size, Complex(0.0, 0.0));
+    std::copy(input.begin(), input.end(), buffer.begin());
 
-    // Zero-pad if necessary
-    ComplexVector padded_input = input;
-    if (N != power_of_two)
-        padded_input.resize(power_of_two, std::complex<double>(0.0, 0.0));
-
-    return fft_radix2(padded_input);
+    fft_radix2(buffer);
+    return buffer;
 }
 
-std::vector<size_t> fourier::ca_cfar(const std::vector<double>& magnitudes, size_t num_train, size_t num_guard, double threshold_factor) {
-    std::vector<size_t> detections;
+std::vector<double> fourier::normalize_magnitudes(const ComplexVector& spectrum, WindowType type) {
+    size_t N = spectrum.size();
+    if (N == 0) return {};
 
-    // Check if window is out of bounds
-    size_t N = magnitudes.size();
-    size_t side_window = num_train + num_guard;
-    if (N <= 2 * side_window) return detections;
+    // Normalization factor
+    double scale = 1.0 / (N * coherent_gain(type));
 
-    // Slide CUT across spectrum
-    for (size_t i = side_window; i < N - side_window; i++) {
-        double noise_sum = 0.0;
+    // Compute normalized magnitudes
+    std::vector<double> magnitudes(N / 2);
+    for (size_t k = 0; k < N / 2; k++) {
+        double magnitude = std::abs(spectrum[k]) * scale;
+        if (k > 0) magnitude *= 2.0; // Fold negative frequency energy into positive bins
 
-        // Add up noise in training cells to the left
-        for (size_t j = i - side_window; j < i - num_guard; j++) {
-            noise_sum += magnitudes[j];
-        }
-
-        // Add up noise in training cells to the right
-        for (size_t j = i + num_guard + 1; j <= i + side_window; j++) {
-            noise_sum += magnitudes[j];
-        }
-
-        // Check if magnitude is above threshold
-        double noise_avg = noise_sum / (2.0 * num_train);
-        double threshold = noise_avg * threshold_factor;
-        if (magnitudes[i] > threshold) detections.push_back(i);
+        magnitudes[k] = magnitude;
     }
 
-    return detections;
+    return magnitudes;
+}
+
+fourier::CfarResult fourier::ca_cfar(const std::vector<double>& magnitudes, const CfarConfig& config) {
+    size_t N = magnitudes.size();
+    size_t side_window = config.num_train + config.num_guard;
+
+    CfarResult result;
+    result.thresholds.assign(N, std::numeric_limits<double>::quiet_NaN());
+
+    // Check for invalid parameter or out-of-bounds window
+    if (config.num_train == 0 || N <= 2 * side_window) return result;
+
+    // Initialize sliding window sums for the first cell under test (CUT)
+    size_t i = side_window;
+    double left_sum = 0.0;
+    double right_sum = 0.0;
+
+    for (size_t j = 0; j < config.num_train; j++) {
+        left_sum += magnitudes[j];
+        right_sum += magnitudes[i + config.num_guard + 1 + j];
+    }
+
+    double inv_total_train = 1.0 / (2.0 * config.num_train);
+
+    // Slide window across entire spectrum
+    while (i < N - side_window) {
+        double noise_avg = (left_sum + right_sum) * inv_total_train;
+        double threshold = noise_avg * config.threshold_factor;
+        result.thresholds[i] = threshold;
+
+        if (magnitudes[i] > threshold) result.detected_bins.push_back(i);
+
+        // Advance sliding window if not at the last valid index
+        if (i + 1 < N - side_window) {
+            left_sum += magnitudes[i - config.num_guard] - magnitudes[i - side_window];
+            right_sum += magnitudes[i + side_window + 1] - magnitudes[i + config.num_guard + 1];
+        }
+
+        i++;
+    }
+
+    return result;
+}
+
+std::vector<size_t> fourier::cluster_detections(const std::vector<size_t> &detections, const std::vector<double> &magnitudes) {
+    std::vector<size_t> clustered;
+    if (detections.empty()) return clustered;
+
+    size_t current_peak_bin = detections[0];
+
+    for (size_t i = 1; i < detections.size(); i++) {
+        if (detections[i] == detections[i - 1] + 1) {
+            // Contiguous detections, choose one with highest energy
+            if (magnitudes[detections[i]] > magnitudes[current_peak_bin])
+                current_peak_bin = detections[i];
+        } else {
+            // No longer traversing previous cluster
+            clustered.push_back(current_peak_bin);
+            current_peak_bin = detections[i];
+        }
+    }
+
+    clustered.push_back(current_peak_bin);
+    return clustered;
 }
