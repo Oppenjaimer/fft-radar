@@ -9,6 +9,10 @@
 #include <random>
 #include <vector>
 
+constexpr double LIGHT_SPEED = 299792458.0; ///< Speed of light (m/s)
+constexpr double RADAR_FREQ = 24e9;         ///< Transmission frequency: 24 GHz (commonly used K-band)
+constexpr double SAMPLE_RATE = 1e4;         ///< Sampling frequency: 10 kHz
+
 /**
  * @brief Simulated radar target.
  */
@@ -96,8 +100,16 @@ int main() {
     if (clustered_detections.empty()) {
         std::cout << "No targets detected\n";
     } else {
+        double hz_per_bin = SAMPLE_RATE / N;
+
         for (size_t bin : clustered_detections) {
-            std::cout << "Target found at bin " << bin << " with magnitude " << magnitudes[bin] << "\n";
+            double doppler_freq = bin * hz_per_bin;
+            double velocity = (doppler_freq * LIGHT_SPEED) / (2.0 * RADAR_FREQ);
+
+            std::cout << "Target at bin " << bin << ":\n"
+                << "  Doppler frequency: " << doppler_freq << " Hz\n"
+                << "  Radial velocity:   " << velocity * 3.6 << " km/h\n"
+                << "  Magnitude:         " << magnitudes[bin] << "\n";
         }
     }
 
