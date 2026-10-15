@@ -2,7 +2,7 @@ SRC_DIR = src
 INC_DIR = include
 BUILD_DIR = build
 BIN_DIR = bin
-TARGET = $(BIN_DIR)/main
+TARGET = $(BIN_DIR)/radar_sim
 
 CXX = g++
 CXXFLAGS = -std=c++20 -Wall -Wextra -pedantic -I$(INC_DIR)

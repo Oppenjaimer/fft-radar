@@ -1,3 +1,3 @@
 make
-./bin/main
+./bin/radar_sim
 python scripts/plot.py
